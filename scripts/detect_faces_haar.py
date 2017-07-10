@@ -90,7 +90,7 @@ class DetectFacesHaar(object):
         self.haar_min_height = rospy.get_param("haar_min_height")
 
         # start dynamic reconfigure client from vision_pipeline
-        self.dynparam = dynamic_reconfigure.client.Client("vision_pipeline",timeout=30,config_callback=self.HandleConfig)
+        #self.dynparam = dynamic_reconfigure.client.Client("vision_pipeline",timeout=30,config_callback=self.HandleConfig)
 
         # start subscriber and publisher
         self.image_sub = rospy.Subscriber("camera/image_raw",Image,self.HandleImage)

@@ -99,7 +99,7 @@ class DetectSaliencyIttiKoch(object):
         self.ittikoch_eraser_radius = rospy.get_param("ittikoch_eraser_radius")
 
         # start dynamic reconfigure client from vision_pipeline
-        self.dynparam = dynamic_reconfigure.client.Client("vision_pipeline",timeout=30,config_callback=self.HandleConfig)        
+        #self.dynparam = dynamic_reconfigure.client.Client("vision_pipeline",timeout=30,config_callback=self.HandleConfig)        
 
         # start subscriber and publisher
         self.image_sub = rospy.Subscriber("camera/image_raw",Image,self.HandleImage)

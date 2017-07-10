@@ -126,7 +126,7 @@ class VisionPipeline(object):
         self.full_saliency_points = rospy.get_param("full_saliency_points")
 
         # start dynamic reconfigure server
-        self.config_server = Server(VisionConfig,self.HandleConfig)
+        #self.config_server = Server(VisionConfig,self.HandleConfig)
 
         # start listening to transforms
         self.listener = tf.TransformListener()
@@ -139,7 +139,7 @@ class VisionPipeline(object):
         self.hand_sub = rospy.Subscriber("raw_hand",Hand,self.HandleHand)
         self.saliency_sub = rospy.Subscriber("raw_saliency",Saliency,self.HandleSaliency)
 
-        self.cface_pub = rospy.Publisher("cface",Candidateface,queue_size=5)
+        self.cface_pub = rospy.Publisher("cface",CandidateFace,queue_size=5)
         self.chand_pub = rospy.Publisher("chand",CandidateHand,queue_size=5)
         self.csaliency_pub = rospy.Publisher("csaliency",CandidateSaliency,queue_size=5)
  
@@ -648,7 +648,7 @@ class VisionPipeline(object):
                         pst = self.listener.transformPoint("world",ps)
 
                         # setup candidate face message
-                        msg = Candidateface()
+                        msg = CandidateFace()
                         msg.session_id = self.session_id
                         msg.camera_id = self.camera_id
                         msg.cface_id = cface_id
@@ -673,14 +673,14 @@ class VisionPipeline(object):
                         self.SendFaceMarkers(self.name,ts,cface_id,"/robot/perception/{}".format(self.name),cface.position)
 
             # prune the candidate faces and remove them if they disappeared
-            to_be_removed = []
-            prune_before_time = ts - rospy.Duration.from_sec(self.face_keep_time)
-            for cface_id in self.cfaces:
-                self.cfaces[cface_id].PruneBefore(prune_before_time)
-                if len(self.cfaces[cface_id].faces) == 0:
-                    to_be_removed.append(cface_id)
-            for key in to_be_removed:
-                del self.cfaces[key]
+            #to_be_removed = []
+            #prune_before_time = ts - rospy.Duration.from_sec(self.face_keep_time)
+            #for cface_id in self.cfaces:
+            #    self.cfaces[cface_id].PruneBefore(prune_before_time)
+            #    if len(self.cfaces[cface_id].faces) == 0:
+            #        to_be_removed.append(cface_id)
+            #for key in to_be_removed:
+            #    del self.cfaces[key]
 
 
             # mine the current candidate hands for confident ones and send them off
@@ -725,14 +725,14 @@ class VisionPipeline(object):
                         self.SendHandMarkers(self.name,ts,chand_id,"/robot/perception/{}".format(self.name),chand.position,chand.gestures)
 
             # prune the candidate hands and remove them if they disappeared
-            to_be_removed = []
-            prune_before_time = ts - rospy.Duration.from_sec(self.hand_keep_time)
-            for chand_id in self.chands:
-                self.chands[chand_id].PruneBefore(prune_before_time)
-                if len(self.chands[chand_id].hands) == 0:
-                    to_be_removed.append(chand_id)
-            for key in to_be_removed:
-                del self.chands[key]
+            #to_be_removed = []
+            #prune_before_time = ts - rospy.Duration.from_sec(self.hand_keep_time)
+            #for chand_id in self.chands:
+            #    self.chands[chand_id].PruneBefore(prune_before_time)
+            #    if len(self.chands[chand_id].hands) == 0:
+            #        to_be_removed.append(chand_id)
+            #for key in to_be_removed:
+            #    del self.chands[key]
 
 
             # mine the current candidate saliencies for confident ones and send them off
@@ -760,14 +760,14 @@ class VisionPipeline(object):
                         self.SendSaliencyMarker(self.name,ts,csaliency_id,"/robot/perception/{}".format(self.name),csaliency.direction)
 
             # prune the candidate saliencies and remove them if they disappeared
-            to_be_removed = []
-            prune_before_time = ts - rospy.Duration.from_sec(self.saliency_keep_time)
-            for csaliency_id in self.csaliencies:
-                self.csaliencies[csaliency_id].PruneBefore(prune_before_time)
-                if len(self.csaliencies[csaliency_id].saliencies) == 0:
-                    to_be_removed.append(csaliency_id)
-            for key in to_be_removed:
-                del self.csaliencies[key]
+            #to_be_removed = []
+            #prune_before_time = ts - rospy.Duration.from_sec(self.saliency_keep_time)
+            #for csaliency_id in self.csaliencies:
+            #    self.csaliencies[csaliency_id].PruneBefore(prune_before_time)
+            #    if len(self.csaliencies[csaliency_id].saliencies) == 0:
+            #        to_be_removed.append(csaliency_id)
+            #for key in to_be_removed:
+            #    del self.csaliencies[key]
 
 
 if __name__ == '__main__':
