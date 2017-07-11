@@ -101,6 +101,7 @@ class VisionPipeline(object):
         self.fovy = rospy.get_param("fovy")
         self.aspect = rospy.get_param("aspect")
         self.rotate = rospy.get_param("rotate")
+        self.cutout = rospy.get_param("cutout")
 
         self.pipeline_rate = rospy.get_param("pipeline_rate")
         self.timer = rospy.Timer(rospy.Duration(1.0 / self.pipeline_rate),self.HandleTimer)
@@ -171,6 +172,7 @@ class VisionPipeline(object):
         self.fovy = data.fovy
         self.aspect = data.aspect
         self.rotate = data.rotate
+        self.cutout = data.cutout
 
         new_pipeline_rate = data.pipeline_rate
         if new_pipeline_rate != self.pipeline_rate:
@@ -390,22 +392,16 @@ class VisionPipeline(object):
 
         with self.lock:
 
-            # convert image from ROS to OpenCV and unrotate
-            image = opencv_bridge.imgmsg_to_cv2(data,"bgr8")
-            width = image.shape[1]
-            height = image.shape[0]
-            if self.rotate == 90:
-                width = image.shape[0]
-                height = image.shape[1]
-                image = cv2.transpose(image)
-            elif self.rotate == -90:
-                width = image.shape[0]
-                height = image.shape[1]
-                image = cv2.transpose(image)
-                image = cv2.flip(image,1)
-            elif self.rotate == 180:
-                image = cv2.flip(image,-1)
-                image = cv2.flip(image,1)
+            # convert image from ROS to OpenCV, unrotate and rescale
+            unimage = opencv_bridge.imgmsg_to_cv2(data,"bgr8")
+            unimagex = unimage.shape[1]
+            unimagey = unimage.shape[0]
+
+            # arbitrary rotation around center by self.rotate
+            rotmat = cv2.getRotationMatrix2D((unimagex / 2,unimagey / 2),self.rotate,1.0)
+            rotimage = cv2.warpAffine(unimage,rotmat,(int(float(unimagex) * self.cutout),int(float(unimagey) * self.cutout)))
+            rotimagex = rotimage.shape[1]
+            rotimagey = rotimage.shape[0]
 
             # get current time
             ts = rospy.get_rostime()
@@ -418,9 +414,9 @@ class VisionPipeline(object):
                     face = self.cfaces[cface_id].Extrapolate(ts)
                 else:
                     face = self.cfaces[cface_id].faces[-1]
-                x = int((0.5 + 0.5 * face.rect.origin.x) * float(width))
-                y = int((0.5 + 0.5 * face.rect.origin.y) * float(height))
-                cv2.circle(image,(x,y),10,(0,0,255),2)
+                x = int((0.5 + 0.5 * face.rect.origin.x) * float(rotimagex))
+                y = int((0.5 + 0.5 * face.rect.origin.y) * float(rotimagey))
+                cv2.circle(rotimage,(x,y),10,(0,0,255),2)
 
                 # annotate with info if available
                 label = ""
@@ -437,7 +433,7 @@ class VisionPipeline(object):
                         label += "female"
                     else:
                         label += "male"
-                cv2.putText(image,label,(x - 20,y + 20),cv2.cv.CV_FONT_HERSHEY_PLAIN,1,(0,255,255))
+                cv2.putText(rotimage,label,(x - 20,y + 20),cv2.cv.CV_FONT_HERSHEY_PLAIN,1,(0,255,255))
 
             # TODO: display hands as green circles
 
@@ -453,11 +449,11 @@ class VisionPipeline(object):
                 fx = 1.0
                 fy = saliency.direction.y / saliency.direction.x
                 fz = saliency.direction.z / saliency.direction.x
-                px = int(0.5 * (1.0 - fy * cpd) * float(width))
-                py = int(0.5 * (1.0 - fz * cpd) * float(height))
-                cv2.circle(image,(px,py),10,(255,0,0),2)
+                px = int(0.5 * (1.0 - fy * cpd) * float(rotimagex))
+                py = int(0.5 * (1.0 - fz * cpd) * float(rotimagey))
+                cv2.circle(unimage,(px,py),10,(255,0,0),2)
 
-            cv2.imshow(self.name,image)
+            cv2.imshow(self.name,rotimage)
 
 
     # send markers to RViz for a face

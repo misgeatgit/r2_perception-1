@@ -1,7 +1,8 @@
 lefteye: {
   fovy: 1.2,
   aspect: 1.333,
-  rotate: 0,
+  rotate: 0.0,
+  cutout: 1.0,
   face_height: 0.155,
   face_detect_work_width: 240,
   face_detect_work_height: 320,
@@ -49,7 +50,8 @@ lefteye: {
 righteye: {
   fovy: 1.2,
   aspect: 1.333,
-  rotate: 0,
+  rotate: -8.5,
+  cutout: 1.0,
   face_height: 0.155,
   face_detect_work_width: 240,
   face_detect_work_height: 320,
@@ -97,7 +99,8 @@ righteye: {
 wideangle: {
   fovy: 0.82,
   aspect: 1.333,
-  rotate: 0,
+  rotate: 0.0,
+  cutout: 1.0,
   face_height: 0.155,
   face_detect_work_width: 320,
   face_detect_work_height: 240,
@@ -145,7 +148,8 @@ wideangle: {
 realsense: {
   fovy: 1.2,
   aspect: 1.333,
-  rotate: 0,  # ignored
+  rotate: 0.0,  # ignored
+  cutout: 1.0,  # ignored
   face_height: 0.155,  # ignored
   face_detect_work_width: 320,  # ignored
   face_detect_work_height: 240,  # ignored

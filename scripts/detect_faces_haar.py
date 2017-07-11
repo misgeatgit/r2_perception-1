@@ -78,6 +78,7 @@ class DetectFacesHaar(object):
         self.fovy = rospy.get_param("fovy")
         self.aspect = rospy.get_param("aspect")
         self.rotate = rospy.get_param("rotate")
+        self.cutout = rospy.get_param("cutout")
 
         self.face_detect_rate = rospy.get_param("face_detect_rate")
         self.timer = rospy.Timer(rospy.Duration(1.0 / self.face_detect_rate),self.HandleTimer)
@@ -113,6 +114,7 @@ class DetectFacesHaar(object):
         self.fovy = data.fovy
         self.aspect = data.aspect
         self.rotate = data.rotate
+        self.cutout = data.cutout
 
         new_face_detect_rate = data.face_detect_rate
         if new_face_detect_rate != self.face_detect_rate:
@@ -155,24 +157,18 @@ class DetectFacesHaar(object):
             height = self.face_detect_work_height
 
             # convert image from ROS to OpenCV, unrotate and rescale
-            image = cv2.resize(opencv_bridge.imgmsg_to_cv2(self.cur_image,"bgr8"),(width,height),interpolation=cv2.INTER_LINEAR)
-            if self.rotate == 90:
-                width = self.face_detect_work_height
-                height = self.face_detect_work_width
-                cpd /= self.aspect
-                image = cv2.transpose(image)
-            elif self.rotate == -90:
-                width = self.face_detect_work_height
-                height = self.face_detect_work_width
-                cpd /= self.aspect
-                image = cv2.transpose(image)
-                image = cv2.flip(image,1)
-            elif self.rotate == 180:
-                image = cv2.flip(image,1)
-                image = cv2.flip(image,-1)
+            image = opencv_bridge.imgmsg_to_cv2(self.cur_image,"bgr8")
+            imagex = image.shape[1]
+            imagey = image.shape[0]
+
+            # arbitrary rotation around center by self.rotate
+            rotmat = cv2.getRotationMatrix2D((imagex / 2,imagey / 2),self.rotate,1.0)
+            rotimage = cv2.warpAffine(image,rotmat,(int(float(imagex) * self.cutout),int(float(imagey) * self.cutout)))
+            rotimagex = rotimage.shape[1]
+            rotimagey = rotimage.shape[0]
 
             # detect all faces in the image
-            faces = self.face_cascade.detectMultiScale(image,scaleFactor=self.haar_scale_factor,minSize=(self.haar_min_width,self.haar_min_height),flags=cv2.cv.CV_HAAR_SCALE_IMAGE)
+            faces = self.face_cascade.detectMultiScale(rotimage,scaleFactor=self.haar_scale_factor,minSize=(self.haar_min_width,self.haar_min_height),flags=cv2.cv.CV_HAAR_SCALE_IMAGE)
 
             # if there are no faces detected, exit
             if len(faces) == 0:
@@ -186,11 +182,11 @@ class DetectFacesHaar(object):
                     continue
 
                 # calculate distance of the face to the camera
-                cx = float(self.face_height) * cpd * float(height) / float(h)
+                cx = float(self.face_height) * cpd * float(rotimagey) / float(h)
 
                 # convert camera coordinates to normalized coordinates on the camera plane
-                fy = 1.0 - 2.0 * float(x + w / 2) / float(width)
-                fz = 1.0 - 2.0 * float(y + h / 2) / float(height)
+                fy = 1.0 - 2.0 * float(x + w / 2) / float(rotimagex)
+                fz = 1.0 - 2.0 * float(y + h / 2) / float(rotimagey)
 
                 # project to face distance
                 cy = cx * fy / cpd
@@ -202,8 +198,8 @@ class DetectFacesHaar(object):
                 msg.ts = self.cur_ts
                 msg.rect.origin.x = -fy
                 msg.rect.origin.y = -fz
-                msg.rect.size.x = 2.0 * float(w) / float(width)
-                msg.rect.size.y = 2.0 * float(h) / float(height)
+                msg.rect.size.x = 2.0 * float(w) / float(rotimagex)
+                msg.rect.size.y = 2.0 * float(h) / float(rotimagey)
                 msg.position.x = cx
                 msg.position.y = cy
                 msg.position.z = cz
@@ -214,7 +210,7 @@ class DetectFacesHaar(object):
                 msg.landmarks = []
 
                 # cut out face thumbnail and resize
-                cvthumb = cv2.resize(image[y:y+h,x:x+w],(self.thumb_width,self.thumb_height))
+                cvthumb = cv2.resize(rotimage[y:y+h,x:x+w],(self.thumb_width,self.thumb_height))
 
                 # convert thumbnail from OpenCV to ROS
                 msg.thumb = opencv_bridge.cv2_to_imgmsg(cvthumb,encoding="8UC3")
