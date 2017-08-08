@@ -101,7 +101,6 @@ class VisionPipeline(object):
         self.fovy = rospy.get_param("fovy")
         self.aspect = rospy.get_param("aspect")
         self.rotate = rospy.get_param("rotate")
-        self.cutout = rospy.get_param("cutout")
 
         self.pipeline_rate = rospy.get_param("pipeline_rate")
         self.timer = rospy.Timer(rospy.Duration(1.0 / self.pipeline_rate),self.HandleTimer)
@@ -235,7 +234,7 @@ class VisionPipeline(object):
                     closest_dist = d
 
             # if close enough to existing face
-            if closest_dist < face_fuse_distance:
+            if closest_dist < self.face_fuse_distance:
 
                 # fuse with existing candidate face
                 self.cfaces[closest_cface_id].Append(data)
@@ -393,15 +392,65 @@ class VisionPipeline(object):
         with self.lock:
 
             # convert image from ROS to OpenCV, unrotate and rescale
-            unimage = opencv_bridge.imgmsg_to_cv2(data,"bgr8")
-            unimagex = unimage.shape[1]
-            unimagey = unimage.shape[0]
+            image = opencv_bridge.imgmsg_to_cv2(data,"bgr8")
+            width = image.shape[1]
+            height = image.shape[0]
+
+            # cache cos and sin
+            cosa = math.cos(self.rotate)
+            sina = math.sin(self.rotate)
+
+            # calculate projection of all corner points
+            centerx = float(width / 2)
+            centery = float(height / 2)
+            ax = (1.0 - cosa) * centerx - sina * centery
+            ay = sina * centerx + (1.0 - cosa) * centery
+            bx = width * cosa + (1.0 - cosa) * centerx - sina * centery
+            by = -sina * width + sina * centerx + (1.0 - cosa) * centery
+            cx = height * sina + (1.0 - cosa) * centerx - sina * centery
+            cy = cosa * height + sina * centerx + (1.0 - cosa) * centery
+            dx = width * cosa + height * sina + (1.0 - cosa) * centerx - sina * centery
+            dy = -sina * width + cosa * height + sina * centerx + (1.0 - cosa) * centery
+
+            # find smallest enclosing rectangle
+            left = ax
+            top = ay
+            right = ax
+            bottom = ay
+            if bx < left:
+                left = bx
+            if bx < right:
+                right = bx
+            if by > top:
+                top = by
+            if by < bottom:
+                bottom = by
+            if cx < left:
+                left = cx
+            if cx > right:
+                right = cx
+            if cy < top:
+                top = cy
+            if cy > bottom:
+                bottom = cy
+            if dx < left:
+                left = dx
+            if dx > right:
+                right = dx
+            if dy < top:
+                top = dy
+            if dy > bottom:
+                botom = dy
+
+            # get offset and size of resulting image
+            offsetx = int(-left)
+            offsety = int(-top)
+            sizex = int(right - left)
+            sizey = int(bottom - top)
 
             # arbitrary rotation around center by self.rotate
-            rotmat = cv2.getRotationMatrix2D((unimagex / 2,unimagey / 2),self.rotate,1.0)
-            rotimage = cv2.warpAffine(unimage,rotmat,(int(float(unimagex) * self.cutout),int(float(unimagey) * self.cutout)))
-            rotimagex = rotimage.shape[1]
-            rotimagey = rotimage.shape[0]
+            rotmat = cv2.getRotationMatrix2D((offsetx,offsety),self.rotate,1.0)
+            rotimage = cv2.warpAffine(image,rotmat,(sizex,sizey))
 
             # get current time
             ts = rospy.get_rostime()
@@ -414,8 +463,8 @@ class VisionPipeline(object):
                     face = self.cfaces[cface_id].Extrapolate(ts)
                 else:
                     face = self.cfaces[cface_id].faces[-1]
-                x = int((0.5 + 0.5 * face.rect.origin.x) * float(rotimagex))
-                y = int((0.5 + 0.5 * face.rect.origin.y) * float(rotimagey))
+                x = int((0.5 + 0.5 * face.rect.origin.x) * float(sizex))
+                y = int((0.5 + 0.5 * face.rect.origin.y) * float(sizey))
                 cv2.circle(rotimage,(x,y),10,(0,0,255),2)
 
                 # annotate with info if available
@@ -446,12 +495,9 @@ class VisionPipeline(object):
                     saliency = self.csaliencies[csaliency_id].saliencies[-1]
 
                 # convert vector back to 2D camera position for visualization
-                fx = 1.0
-                fy = saliency.direction.y / saliency.direction.x
-                fz = saliency.direction.z / saliency.direction.x
-                px = int(0.5 * (1.0 - fy * cpd) * float(rotimagex))
-                py = int(0.5 * (1.0 - fz * cpd) * float(rotimagey))
-                cv2.circle(unimage,(px,py),10,(255,0,0),2)
+                px = int(saliency.screen.x * float(sizex))
+                py = int(saliency.screen.y * float(sizey))
+                cv2.circle(rotimage,(px,py),10,(255,0,0),2)
 
             cv2.imshow(self.name,rotimage)
 
@@ -669,14 +715,14 @@ class VisionPipeline(object):
                         self.SendFaceMarkers(self.name,ts,cface_id,"/robot/perception/{}".format(self.name),cface.position)
 
             # prune the candidate faces and remove them if they disappeared
-            #to_be_removed = []
-            #prune_before_time = ts - rospy.Duration.from_sec(self.face_keep_time)
-            #for cface_id in self.cfaces:
-            #    self.cfaces[cface_id].PruneBefore(prune_before_time)
-            #    if len(self.cfaces[cface_id].faces) == 0:
-            #        to_be_removed.append(cface_id)
-            #for key in to_be_removed:
-            #    del self.cfaces[key]
+            to_be_removed = []
+            prune_before_time = ts - rospy.Duration.from_sec(self.face_keep_time)
+            for cface_id in self.cfaces:
+                self.cfaces[cface_id].PruneBefore(prune_before_time)
+                if len(self.cfaces[cface_id].faces) == 0:
+                    to_be_removed.append(cface_id)
+            for key in to_be_removed:
+                del self.cfaces[key]
 
 
             # mine the current candidate hands for confident ones and send them off
@@ -721,14 +767,14 @@ class VisionPipeline(object):
                         self.SendHandMarkers(self.name,ts,chand_id,"/robot/perception/{}".format(self.name),chand.position,chand.gestures)
 
             # prune the candidate hands and remove them if they disappeared
-            #to_be_removed = []
-            #prune_before_time = ts - rospy.Duration.from_sec(self.hand_keep_time)
-            #for chand_id in self.chands:
-            #    self.chands[chand_id].PruneBefore(prune_before_time)
-            #    if len(self.chands[chand_id].hands) == 0:
-            #        to_be_removed.append(chand_id)
-            #for key in to_be_removed:
-            #    del self.chands[key]
+            to_be_removed = []
+            prune_before_time = ts - rospy.Duration.from_sec(self.hand_keep_time)
+            for chand_id in self.chands:
+                self.chands[chand_id].PruneBefore(prune_before_time)
+                if len(self.chands[chand_id].hands) == 0:
+                    to_be_removed.append(chand_id)
+            for key in to_be_removed:
+                del self.chands[key]
 
 
             # mine the current candidate saliencies for confident ones and send them off
@@ -756,14 +802,14 @@ class VisionPipeline(object):
                         self.SendSaliencyMarker(self.name,ts,csaliency_id,"/robot/perception/{}".format(self.name),csaliency.direction)
 
             # prune the candidate saliencies and remove them if they disappeared
-            #to_be_removed = []
-            #prune_before_time = ts - rospy.Duration.from_sec(self.saliency_keep_time)
-            #for csaliency_id in self.csaliencies:
-            #    self.csaliencies[csaliency_id].PruneBefore(prune_before_time)
-            #    if len(self.csaliencies[csaliency_id].saliencies) == 0:
-            #        to_be_removed.append(csaliency_id)
-            #for key in to_be_removed:
-            #    del self.csaliencies[key]
+            to_be_removed = []
+            prune_before_time = ts - rospy.Duration.from_sec(self.saliency_keep_time)
+            for csaliency_id in self.csaliencies:
+                self.csaliencies[csaliency_id].PruneBefore(prune_before_time)
+                if len(self.csaliencies[csaliency_id].saliencies) == 0:
+                    to_be_removed.append(csaliency_id)
+            for key in to_be_removed:
+                del self.csaliencies[key]
 
 
 if __name__ == '__main__':
