@@ -25,6 +25,7 @@ catkin_package(
 
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/devel/include
     ${CMAKE_SOURCE_DIR}/r2_perception/include
     )
 
@@ -36,7 +37,7 @@ target_link_libraries(sensor_fusion_node
 	${OCTOMAP_OCTOMATH_LIBRARY}
 )
 
-add_dependencies(sensor_fusion_node sensor_fusion_generate_messages_cpp)
+add_dependencies(sensor_fusion_node r2_perception_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(sensor_fusion_node

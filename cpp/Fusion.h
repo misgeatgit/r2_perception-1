@@ -2,8 +2,8 @@
 // Dynamic reconfigure includes.
 #include "dynamic_reconfigure/server.h"
 // Auto-generated from cfg/ directory.
-#include "r2_perception/hearing_pipelineConfig.h"
-#include "r2_perception/vision_pipelineConfig.h"
+//#include "r2_perception/hearing_pipelineConfig.h"
+//#include "r2_perception/vision_pipelineConfig.h"
 
 
 
